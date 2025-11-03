@@ -1,22 +1,59 @@
 import React from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 
 const Login = () => {
-  const { signInWithGoogle } = useAuth()
+  const { signInWithGoogle, currentUser, loading } = useAuth()
+  const navigate = useNavigate()
   const [error, setError] = React.useState(null)
-  const [loading, setLoading] = React.useState(false)
+  const [signingIn, setSigningIn] = React.useState(false)
+
+  // Redirect if already logged in
+  React.useEffect(() => {
+    if (!loading && currentUser) {
+      navigate('/dashboard', { replace: true })
+    }
+  }, [currentUser, loading, navigate])
 
   const handleGoogleSignIn = async () => {
     try {
-      setLoading(true)
+      setSigningIn(true)
       setError(null)
       await signInWithGoogle()
+      // Redirect will happen automatically via useEffect when currentUser updates
     } catch (err) {
-      setError(err.message || 'Failed to sign in. Please try again.')
+      // Provide user-friendly error messages
+      let errorMessage = 'Failed to sign in. Please try again.'
+      
+      if (err.message?.includes('Popup blocked')) {
+        errorMessage = 'Popup was blocked. Please allow popups for this site and try again.'
+      } else if (err.code === 'auth/popup-blocked') {
+        errorMessage = 'Popup was blocked by your browser. Please allow popups and try again.'
+      } else if (err.code === 'auth/popup-closed-by-user') {
+        errorMessage = 'Sign-in popup was closed. Please try again.'
+      } else if (err.message) {
+        errorMessage = err.message
+      }
+      
+      setError(errorMessage)
       console.error('Sign in error:', err)
     } finally {
-      setLoading(false)
+      setSigningIn(false)
     }
+  }
+
+  // Show loading if checking auth state
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 to-gray-800">
+        <div className="text-white text-xl">Loading...</div>
+      </div>
+    )
+  }
+
+  // Don't show login if already logged in (redirect is in progress)
+  if (currentUser) {
+    return null
   }
 
   return (
@@ -35,10 +72,10 @@ const Login = () => {
 
         <button
           onClick={handleGoogleSignIn}
-          disabled={loading}
+          disabled={signingIn}
           className="w-full flex items-center justify-center gap-3 bg-white text-gray-900 font-semibold py-3 px-6 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {loading ? (
+          {signingIn ? (
             <>
               <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
