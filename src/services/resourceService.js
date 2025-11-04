@@ -14,6 +14,7 @@ import {
 } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 import { db, storage } from '../firebase/config'
+import { fetchUrlMetadata } from '../utils/urlPreview'
 
 /**
  * Resource types
@@ -35,12 +36,22 @@ export const RESOURCE_TYPES = {
 export const createResource = async (resourceData, userId, file = null) => {
   try {
     let mediaUrl = null
+    let urlPreview = null
 
     // Upload file if provided
     if (file) {
       const fileRef = ref(storage, `resources/${userId}/${Date.now()}_${file.name}`)
       await uploadBytes(fileRef, file)
       mediaUrl = await getDownloadURL(fileRef)
+    }
+
+    // Fetch URL preview metadata if URL is provided
+    if (resourceData.url && !file) {
+      try {
+        urlPreview = await fetchUrlMetadata(resourceData.url)
+      } catch (error) {
+        console.warn('Failed to fetch URL preview:', error)
+      }
     }
 
     // Prepare resource data
@@ -51,6 +62,7 @@ export const createResource = async (resourceData, userId, file = null) => {
       tags: resourceData.tags || [],
       notes: resourceData.notes || '',
       mediaUrl,
+      urlPreview, // Store preview metadata
       userId,
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
@@ -139,6 +151,7 @@ export const updateResource = async (resourceId, updates, file = null) => {
 
     const currentData = resourceSnap.data()
     let mediaUrl = currentData.mediaUrl
+    let urlPreview = currentData.urlPreview
 
     // Upload new file if provided
     if (file) {
@@ -156,12 +169,21 @@ export const updateResource = async (resourceId, updates, file = null) => {
       const fileRef = ref(storage, `resources/${currentData.userId}/${Date.now()}_${file.name}`)
       await uploadBytes(fileRef, file)
       mediaUrl = await getDownloadURL(fileRef)
+      urlPreview = null // Clear preview if file is uploaded
+    } else if (updates.url && updates.url !== currentData.url) {
+      // Fetch new URL preview if URL changed and no file uploaded
+      try {
+        urlPreview = await fetchUrlMetadata(updates.url)
+      } catch (error) {
+        console.warn('Failed to fetch URL preview:', error)
+      }
     }
 
     // Prepare update data
     const updateData = {
       ...updates,
       mediaUrl,
+      urlPreview,
       updatedAt: Timestamp.now()
     }
 
